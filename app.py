@@ -1,16 +1,48 @@
 import os
+from typing import Callable, Iterator, Optional
 
-from flask import Flask
+from constants import BASE_DIR, DATA_DIR
+from flask import Flask, request, render_template, Response
+from utils import dict_of_utils, log_generator
 
 app = Flask(__name__)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
+
+@app.get('/')
+def index() -> str:
+    return render_template("index.html")
 
 
 @app.post("/perform_query")
-def perform_query():
-    # нужно взять код из предыдущего ДЗ
-    # добавить команду regex
-    # добавить типизацию в проект, чтобы проходила утилиту mypy app.py
-    return app.response_class('', content_type="text/plain")
+def perform_query() -> str | Response:
+    file_name: str = request.form['file_name']
+    cmd1: str = request.form['cmd1']
+    value1: str = request.form['value1']
+    cmd2: str = request.form['cmd2']
+    value2: str = request.form['value2']
+
+    if not all((file_name, cmd1, value1, cmd2, value2)):
+        return Response('Не все поля заполнены', status=400)
+
+    if file_name is None:
+        file_name = DATA_DIR
+
+    if not os.path.exists(BASE_DIR + '/data/' + file_name):
+        return Response('Файл не найден', status=400)
+
+    default_generator = log_generator()
+
+    first_func: Optional[Callable] = dict_of_utils.get(cmd1)
+    second_func: Optional[Callable] = dict_of_utils.get(cmd2)
+
+    result: Optional[Iterator[str]] = None
+    if first_func is not None:
+        result = first_func(param=value1, generator=default_generator)
+        if second_func is not None:
+            result = second_func(param=value2, generator=result)
+
+    return render_template("block.html", items=result)
+
+
+if __name__ == '__main__':
+    app.run()
